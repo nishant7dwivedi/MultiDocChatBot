@@ -63,12 +63,32 @@ def read_word(file):
     return "\n".join(para.text for para in doc.paragraphs)
 
 def read_excel(file):
-    df = pd.read_excel(file)
-    return df.to_string()
+    try:
+        excel_file = pd.ExcelFile(file)
+
+        text = ""
+
+        for sheet in excel_file.sheet_names:
+            df = pd.read_excel(excel_file, sheet_name=sheet)
+
+            text += f"\n\nSheet Name: {sheet}\n"
+            text += df.fillna("").to_string(index=False)
+
+        return text
+
+    except Exception as e:
+        st.error(f"Error reading Excel file: {e}")
+        return ""
 
 def read_csv(file):
-    df = pd.read_csv(file)
-    return df.to_string()
+    try:
+        df = pd.read_csv(file)
+
+        return df.fillna("").to_string(index=False)
+
+    except Exception as e:
+        st.error(f"Error reading CSV file: {e}")
+        return ""
 
 def read_json(file):
     data = json.load(file)
@@ -96,8 +116,8 @@ def load_and_process_file(uploaded_file, file_type):
         return None
     
     text_splitter = CharacterTextSplitter(
-        chunk_size=_env_int("CHUNK_SIZE", 1000),
-        chunk_overlap=_env_int("CHUNK_OVERLAP", 200),
+        chunk_size=_env_int("CHUNK_SIZE", 2000),
+        chunk_overlap=_env_int("CHUNK_OVERLAP", 400),
     )
     return text_splitter.split_text(text)
 
@@ -113,9 +133,10 @@ def setup_qa_system(vector_store):
     return RetrievalQA.from_chain_type(
         llm=create_llm(),
         chain_type="stuff",
-        retriever=vector_store.as_retriever(),
+        retriever=vector_store.as_retriever(
+            search_kwargs={"k": 5}
+        ),
     )
-
 
 def setup_general_chatbot():
     return create_llm()
@@ -142,7 +163,12 @@ if uploaded_file is not None:
                 
                 # Show file preview
                 st.sidebar.subheader("File Preview")
-                st.sidebar.text_area("Contents", "\n".join(texts[:10]), height=200)
+
+                st.sidebar.text_area(
+                 "Contents",
+                  "\n".join(texts[:3]),
+                  height=300
+                )
 else:
     if "general_chatbot" not in st.session_state:
         st.session_state.general_chatbot = setup_general_chatbot()
